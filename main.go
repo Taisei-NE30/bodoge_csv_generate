@@ -92,7 +92,7 @@ func main() {
 		log.Fatalf("Unable to read client secret file: %v", err)
 	}
 
-	// If modifying these scopes, delete your previously saved token.json.
+	//If modifying these scopes, delete your previously saved token.json.
 	config, err := google.ConfigFromJSON(b, "https://www.googleapis.com/auth/spreadsheets")
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
@@ -137,7 +137,7 @@ func main() {
 
 	for i := 0; i < listLen; i++ {
 		var row []string
-		err := page.Find(".list--game > ul > li:nth-child(" + strconv.Itoa(i) + ") > a").Click()
+		err := page.FindByXPath("//div[@class='list--games']/ul/li[position()=" + strconv.Itoa(i+1) +"]/a").Click()
 		if err != nil {
 			log.Fatalf("Failed to click: %v", err)
 		}
@@ -174,7 +174,7 @@ func main() {
 				row = append(row, numRe.FindString(year))
 			}
 		})
-
+		fmt.Println(row)
 	}
 
 }
