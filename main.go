@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -72,7 +73,7 @@ func saveToken(path string, token *oauth2.Token) {
 		log.Fatalf("Unable to cache oauth token: %v", err)
 	}
 	defer f.Close()
-	json.NewEncoder(f).Encode(token)
+	_ = json.NewEncoder(f).Encode(token)
 }
 
 func main() {
@@ -84,6 +85,7 @@ func main() {
 		"actionPlot", "realTime", "memory", "reasoning", "word", "action", "storyMaking", "variablePlayerPower",
 		"drawing", "legacy", "escapeRoom",
 	}
+	spreadsheetId := "1FIgJ7QfdaWDwZ8KOEydTss-eBmQB6_38nsTS-hy-EUg"
 
 	b, err := ioutil.ReadFile("credentials.json")
 	if err != nil {
@@ -102,19 +104,10 @@ func main() {
 		log.Fatalf("Unable to retrieve Sheets client: %v", err)
 	}
 
-	spreadsheetId := "1FIgJ7QfdaWDwZ8KOEydTss-eBmQB6_38nsTS-hy-EUg"
-	readRange := "Class Data!A2:E"
-	resp, err := srv.Spreadsheets.Values.Get(spreadsheetId, readRange).Do()
-	if err != nil {
-		log.Fatalf("Unable to retrieve data from sheet: %v", err)
-	}
-
-
-
 	url := "https://bodoge.hoobby.net/games"
 	driver := agouti.ChromeDriver()
 
-	err := driver.Start()
+	err = driver.Start()
 	if err != nil {
 		log.Printf("Failed to start driver: %v", err)
 	}
@@ -139,18 +132,49 @@ func main() {
 	contentsDom, _ := goquery.NewDocumentFromReader(readerCurContents)
 	gameList := contentsDom.Find(".list--games > ul").Children()
 	listLen := gameList.Length()
-
+	numRe := regexp.MustCompile(`[0-9]+`)
+	timeRe := regexp.MustCompile(`（.+）`)
 
 	for i := 0; i < listLen; i++ {
-		page.Find(".list--game > ul > li:nth-child(" + strconv.Itoa(i) + ") > a").Click()
+		var row []string
+		err := page.Find(".list--game > ul > li:nth-child(" + strconv.Itoa(i) + ") > a").Click()
+		if err != nil {
+			log.Fatalf("Failed to click: %v", err)
+		}
 		time.Sleep(5 * time.Second) //ブラウザが反応するまで待つ
+
 		curContentsDom, err := page.HTML()
 		if err != nil {
 			log.Printf("Failed to get html: %v", err)
 		}
 		readerCurContents := strings.NewReader(curContentsDom)
 		contentsDom, _ := goquery.NewDocumentFromReader(readerCurContents)
-		contentsDom.Find("")
+		contentsDom.Find("div.product > table > tbody > tr").Each(func(index int, s *goquery.Selection) {
+			switch index {
+			case 0:
+				row = append(row, s.Find("td").Text())
+
+			case 2:
+				data := s.Find("td").Text()
+				players := numRe.FindAllString(data, -1)
+				row = append(row, players[0], players[1])
+				time := strings.Trim(timeRe.FindString(data), "（）")
+				if strings.Contains(time, "未登録") {
+					row = append(row, "")
+				} else {
+					row = append(row, time)
+				}
+
+			case 3:
+				age := s.Find("td").Text()
+				row = append(row, numRe.FindString(age))
+
+			case 4:
+				year := s.Find("td").Text()
+				row = append(row, numRe.FindString(year))
+			}
+		})
+
 	}
 
 }
