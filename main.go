@@ -77,14 +77,20 @@ func saveToken(path string, token *oauth2.Token) {
 }
 
 func main() {
-	mechanismStart := 6
-	mechanism := []string{
-		"auction", "diceRoll", "tilePlacement", "bluff", "areaMajority", "hiddenRoles", "cooperative",
-		"workerPlacement", "balance", "draft", "network", "stock", "trickTaking", "burst", "setCollection",
-		"handManagement", "deckBuilding", "batting", "negotiation", "team", "actionPoint", "variablePhaseOrder",
-		"actionPlot", "realTime", "memory", "reasoning", "word", "action", "storyMaking", "variablePlayerPower",
-		"drawing", "legacy", "escapeRoom",
+	mechanisms := []string {
+		"Auction / Bidding", "Dice Rolling", "Tile Placement", "Bluff", "Area Majority / Area Control / Area influence",
+		"Mafia Game / Concealment", "Co-operative Play", "Worker Placement", "Balance Game", "Drafting",
+		"Route / Network Building", "Investment", "Trick-taking", "Burst", "Set Collection", "Hand Management",
+		"Deck / Pool Building", "Batting", "Negotiation", "Partnerships", "Action Point System", "Variable Phase Order",
+		"Simultaneous Action Selection", "Real-time", "Memory", "Deduction", "Word Game", "Action", "Storytelling",
+		"Variable Player Powers", "drawing", "Legacy System", "Mystery",
 	}
+	themes := []string {
+		"Civilization", "Fantasy", "Cthulhu", "Galaxy / Star", "Science Fiction", "War / Militaly", "Exploring",
+		"City Builder", "Territory", "Animal", "Mafia / Yakuza", "Detective", "Spy / Agent", "Zombie",
+		"Ninja / Samurai", "Pirates / Vikings", "Farming", "Music", "Sports", "Train / Railway", "Non-Themed",
+	}
+
 	spreadsheetId := "1FIgJ7QfdaWDwZ8KOEydTss-eBmQB6_38nsTS-hy-EUg"
 
 	b, err := ioutil.ReadFile("credentials.json")
@@ -157,12 +163,22 @@ func main() {
 			case 2:
 				data := s.Find("td").Text()
 				players := numRe.FindAllString(data, -1)
-				row = append(row, players[0], players[1])
+				if len(players) == 1 {
+					row = append(row, players[0], players[0])
+				} else {
+					row = append(row, players[0], players[1])
+				}
 				time := strings.Trim(timeRe.FindString(data), "（）")
 				if strings.Contains(time, "未登録") {
 					row = append(row, "")
 				} else {
-					row = append(row, time)
+					timeTrim := numRe.FindAllString(time, -1)
+					if len(timeTrim) == 1 {
+						row = append(row, timeTrim[0], timeTrim[0])
+					} else {
+						row = append(row, timeTrim[0], timeTrim[1])
+					}
+
 				}
 
 			case 3:
@@ -174,6 +190,42 @@ func main() {
 				row = append(row, numRe.FindString(year))
 			}
 		})
+		designer := contentsDom.Find("div.credit > table > tbody > tr:nth-child(1) > td > a").Text()
+		row = append(row, designer)
+
+
+
+		if val, exists :=contentsDom.Find("div.mechanics > div").Attr("class"); val == "empty" || !exists {
+			for i := 0; i < len(mechanisms); i++ {
+				row = append(row, "0")
+			}
+		} else {
+			for _, mechanism := range mechanisms {
+				contentsDom.Find("div.mechanics > ul > li").Each(func(index int, selection *goquery.Selection) {
+					if mechanism == selection.Find("a > div.en").Text() {
+						row = append(row, "1")
+					} else {
+						row = append(row, "0")
+					}
+				})
+			}
+		}
+
+		if val, exists :=contentsDom.Find("div.concepts > div").Attr("class"); val == "empty" || !exists {
+			for i := 0; i < len(mechanisms); i++ {
+				row = append(row, "0")
+			}
+		} else {
+			for _, theme := range themes {
+				contentsDom.Find("div.concepts > ul > li").Each(func(index int, selection *goquery.Selection) {
+					if theme == selection.Find("a > div.en").Text() {
+						row = append(row, "1")
+					} else {
+						row = append(row, "0")
+					}
+				})
+			}
+		}
 		fmt.Println(row)
 	}
 
