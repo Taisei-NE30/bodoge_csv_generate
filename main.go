@@ -147,10 +147,6 @@ func main() {
 		gameList := contentsDom.Find(".list--games > ul").Children()
 		listLen := gameList.Length()
 
-		if listLen < 60 {
-			break
-		}
-
 		for i := 0; i < listLen; i++ {
 			err := page.FindByXPath("//div[@class='list--games']/ul/li[position()=" + strconv.Itoa(i+1) + "]/a").Click()
 			if err != nil {
@@ -252,17 +248,20 @@ func main() {
 			}
 			time.Sleep(1 * time.Second)
 		}
-		writeRange := "シート1!A2"
-		valueRange := &sheets.ValueRange{
-			Values: inputData,
-		}
-		_, err = srv.Spreadsheets.Values.Update(spreadsheetId, writeRange, valueRange).
-			ValueInputOption("RAW").Do()
+		err := page.FindByXPath("//div[@class='results-pagination']/ol/li/a[contains(text(), '次へ')]").Click()
 		if err != nil {
-			log.Fatalf("Unable to retrieve data from sheet. %v", err)
-		} else {
-			fmt.Println("Success!")
+			break
 		}
 	}
-
+	writeRange := "シート1!A2"
+	valueRange := &sheets.ValueRange{
+		Values: inputData,
+	}
+	_, err = srv.Spreadsheets.Values.Update(spreadsheetId, writeRange, valueRange).
+		ValueInputOption("RAW").Do()
+	if err != nil {
+		log.Fatalf("Unable to retrieve data from sheet. %v", err)
+	} else {
+		fmt.Println("Success!")
+	}
 }
