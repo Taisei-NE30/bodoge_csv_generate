@@ -135,128 +135,134 @@ func main() {
 		log.Printf("Failed to get html: %v", err)
 	}
 
-	readerCurContents := strings.NewReader(curContentsDom)
-	contentsDom, _ := goquery.NewDocumentFromReader(readerCurContents)
-	gameList := contentsDom.Find(".list--games > ul").Children()
-	listLen := gameList.Length()
+
+	var row []interface{}
 	numRe := regexp.MustCompile(`[0-9]+`)
 	playerRe := regexp.MustCompile(`(?m)[0-9]+人(用|～[0-9]+人)`)
 	timeRe := regexp.MustCompile(`（.+）`)
 
-	var row []interface{}
-	for i := 0; i < listLen; i++ {
-		err := page.FindByXPath("//div[@class='list--games']/ul/li[position()=" + strconv.Itoa(i+1) +"]/a").Click()
-		if err != nil {
-			log.Fatalf("Failed to click: %v", err)
-		}
-		time.Sleep(1 * time.Second) //ブラウザが反応するまで待つ
-
-		curContentsDom, err := page.HTML()
-		if err != nil {
-			log.Printf("Failed to get html: %v", err)
-		}
+	for {
 		readerCurContents := strings.NewReader(curContentsDom)
 		contentsDom, _ := goquery.NewDocumentFromReader(readerCurContents)
-		contentsDom.Find("div.product > table > tbody > tr").Each(func(index int, s *goquery.Selection) {
-			switch index {
-			case 0:
-				row = append(row, s.Find("td").Text())
+		gameList := contentsDom.Find(".list--games > ul").Children()
+		listLen := gameList.Length()
 
-			case 2:
-				data := s.Find("td").Text()
-				players := playerRe.FindString(data)
-				playerNum := numRe.FindAllString(players, -1)
-				if len(playerNum) == 1 {
-					row = append(row, playerNum[0], playerNum[0])
-				} else {
-					row = append(row, playerNum[0], playerNum[1])
-				}
-				gameTime := strings.Trim(timeRe.FindString(data), "（）")
-				if strings.Contains(gameTime, "未登録") {
-					row = append(row, "", "")
-				} else {
-					timeTrim := numRe.FindAllString(gameTime, -1)
-					if len(timeTrim) == 1 {
-						row = append(row, timeTrim[0], timeTrim[0])
+		if listLen < 60 {
+			break
+		}
+
+		for i := 0; i < listLen; i++ {
+			err := page.FindByXPath("//div[@class='list--games']/ul/li[position()=" + strconv.Itoa(i+1) + "]/a").Click()
+			if err != nil {
+				log.Fatalf("Failed to click: %v", err)
+			}
+			time.Sleep(1 * time.Second) //ブラウザが反応するまで待つ
+
+			curContentsDom, err := page.HTML()
+			if err != nil {
+				log.Printf("Failed to get html: %v", err)
+			}
+			readerCurContents := strings.NewReader(curContentsDom)
+			contentsDom, _ := goquery.NewDocumentFromReader(readerCurContents)
+			contentsDom.Find("div.product > table > tbody > tr").Each(func(index int, s *goquery.Selection) {
+				switch index {
+				case 0:
+					row = append(row, s.Find("td").Text())
+
+				case 2:
+					data := s.Find("td").Text()
+					players := playerRe.FindString(data)
+					playerNum := numRe.FindAllString(players, -1)
+					if len(playerNum) == 1 {
+						row = append(row, playerNum[0], playerNum[0])
 					} else {
-						row = append(row, timeTrim[0], timeTrim[1])
+						row = append(row, playerNum[0], playerNum[1])
+					}
+					gameTime := strings.Trim(timeRe.FindString(data), "（）")
+					if strings.Contains(gameTime, "未登録") {
+						row = append(row, "", "")
+					} else {
+						timeTrim := numRe.FindAllString(gameTime, -1)
+						if len(timeTrim) == 1 {
+							row = append(row, timeTrim[0], timeTrim[0])
+						} else {
+							row = append(row, timeTrim[0], timeTrim[1])
+						}
+
 					}
 
+				case 3:
+					age := s.Find("td").Text()
+					row = append(row, numRe.FindString(age))
+
+				case 4:
+					year := s.Find("td").Text()
+					row = append(row, numRe.FindString(year))
 				}
+			})
+			designer := contentsDom.Find("div.credit > table > tbody > tr:nth-child(1) > td > a").Text()
+			row = append(row, designer)
 
-			case 3:
-				age := s.Find("td").Text()
-				row = append(row, numRe.FindString(age))
+			isNoData := true
 
-			case 4:
-				year := s.Find("td").Text()
-				row = append(row, numRe.FindString(year))
-			}
-		})
-		designer := contentsDom.Find("div.credit > table > tbody > tr:nth-child(1) > td > a").Text()
-		row = append(row, designer)
-
-		isNoData := true
-
-		if val, exists :=contentsDom.Find("div.mechanics > div").Attr("class"); val == "empty" || !exists {
-			for i := 0; i < len(mechanisms); i++ {
-				row = append(row, 0)
-			}
-		} else {
-			for _, mechanism := range mechanisms {
-				isNoData = true
-				contentsDom.Find("div.mechanics > ul > li").Each(func(index int, selection *goquery.Selection) {
-					if mechanism == selection.Find("a > div.en").Text() {
-						row = append(row, 1)
-						isNoData = false
-					}
-				})
-				if isNoData {
+			if val, exists := contentsDom.Find("div.mechanics > div").Attr("class"); val == "empty" || !exists {
+				for i := 0; i < len(mechanisms); i++ {
 					row = append(row, 0)
 				}
-			}
-		}
-
-		if val, exists :=contentsDom.Find("div.concepts > div").Attr("class"); val == "empty" || !exists {
-			for i := 0; i < len(mechanisms); i++ {
-				row = append(row, 0)
-			}
-		} else {
-			for _, theme := range themes {
-				isNoData = true
-				contentsDom.Find("div.concepts > ul > li").Each(func(index int, selection *goquery.Selection) {
-					if theme == selection.Find("a > div.en").Text() {
-						row = append(row, 1)
-						isNoData = false
+			} else {
+				for _, mechanism := range mechanisms {
+					isNoData = true
+					contentsDom.Find("div.mechanics > ul > li").Each(func(index int, selection *goquery.Selection) {
+						if mechanism == selection.Find("a > div.en").Text() {
+							row = append(row, 1)
+							isNoData = false
+						}
+					})
+					if isNoData {
+						row = append(row, 0)
 					}
-				})
-				if isNoData {
-					row = append(row, 0)
 				}
 			}
-		}
-		fmt.Println(row)
-		inputData = append(inputData, row)
-		row = nil
 
-		err = page.Back()
+			if val, exists := contentsDom.Find("div.concepts > div").Attr("class"); val == "empty" || !exists {
+				for i := 0; i < len(mechanisms); i++ {
+					row = append(row, 0)
+				}
+			} else {
+				for _, theme := range themes {
+					isNoData = true
+					contentsDom.Find("div.concepts > ul > li").Each(func(index int, selection *goquery.Selection) {
+						if theme == selection.Find("a > div.en").Text() {
+							row = append(row, 1)
+							isNoData = false
+						}
+					})
+					if isNoData {
+						row = append(row, 0)
+					}
+				}
+			}
+			fmt.Println(row)
+			inputData = append(inputData, row)
+			row = nil
+
+			err = page.Back()
+			if err != nil {
+				log.Fatalf("Failed to back: %v", err)
+			}
+			time.Sleep(1 * time.Second)
+		}
+		writeRange := "シート1!A2"
+		valueRange := &sheets.ValueRange{
+			Values: inputData,
+		}
+		_, err = srv.Spreadsheets.Values.Update(spreadsheetId, writeRange, valueRange).
+			ValueInputOption("RAW").Do()
 		if err != nil {
-			log.Fatalf("Failed to back: %v", err)
+			log.Fatalf("Unable to retrieve data from sheet. %v", err)
+		} else {
+			fmt.Println("Success!")
 		}
-		time.Sleep(1 * time.Second)
 	}
 
-	writeRange := "シート1!A2"
-	valueRange := &sheets.ValueRange{
-		Values: inputData,
-	}
-
-	_, err = srv.Spreadsheets.Values.Update(spreadsheetId, writeRange, valueRange).
-		ValueInputOption("RAW").Do()
-
-	if err != nil {
-		log.Fatalf("Unable to retrieve data from sheet. %v", err)
-	} else {
-		fmt.Println("Success!")
-	}
 }
